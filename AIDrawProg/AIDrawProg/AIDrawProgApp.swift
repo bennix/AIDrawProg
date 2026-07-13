@@ -1,32 +1,15 @@
-//
-//  AIDrawProgApp.swift
-//  AIDrawProg
-//
-//  Created by Nelle Rtcai on 7/14/26.
-//
-
 import SwiftUI
 import SwiftData
 
 @main
 struct AIDrawProgApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    @StateObject private var settings = AppSettings()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(settings)
         }
-        .modelContainer(sharedModelContainer)
+        .modelContainer(for: GenerationRecord.self)
     }
 }
