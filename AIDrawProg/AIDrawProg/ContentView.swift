@@ -22,7 +22,7 @@ struct ContentView: View {
                         canvasSection
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                         Divider()
-                        resultPlaceholder
+                        ResultView(viewModel: viewModel)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 } else {
@@ -30,7 +30,7 @@ struct ContentView: View {
                         canvasSection
                             .tabItem { Label("画布", systemImage: "pencil.and.scribble") }
                             .tag(0)
-                        resultPlaceholder
+                        ResultView(viewModel: viewModel)
                             .tabItem { Label("结果", systemImage: "doc.text") }
                             .tag(1)
                     }
@@ -121,11 +121,4 @@ struct ContentView: View {
         }
     }
 
-    private var resultPlaceholder: some View {
-        ScrollView {
-            Text(viewModel.responseText)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-        }
-    }
 }
