@@ -50,7 +50,9 @@ struct ContentView: View {
                 }
             }
             .sheet(isPresented: $showingSettings) { SettingsView() }
-            .sheet(isPresented: $showingHistory) { Text("TODO") }
+            .sheet(isPresented: $showingHistory) {
+                NavigationStack { HistoryView() }
+            }
             .alert("尚未设置 API Key，请前往设置页填写", isPresented: $viewModel.needsAPIKey) {
                 Button("前往设置") { showingSettings = true }
                 Button("取消", role: .cancel) {}
