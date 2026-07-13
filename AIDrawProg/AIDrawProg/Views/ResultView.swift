@@ -59,8 +59,7 @@ struct ResponseSegmentsView: View {
         ForEach(ResponseParser.parse(responseText)) { segment in
             switch segment {
             case .text(_, let content):
-                Text(LocalizedStringKey(content))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                MarkdownTextView(markdown: content)
             case .code(_, let content, let language):
                 CodeBlockView(content: content, language: language)
             }
