@@ -17,6 +17,8 @@ struct MarkdownTextView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 case .table(let headers, let rows):
                     MarkdownTableView(headers: headers, rows: rows)
+                case .divider:
+                    Divider()
                 }
             }
         }

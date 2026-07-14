@@ -5,6 +5,7 @@ enum MarkdownRenderer {
         case heading(level: Int, content: String)
         case paragraph(String)
         case table(headers: [String], rows: [[String]])
+        case divider
     }
 
     static func parse(_ markdown: String) -> [Block] {
@@ -15,6 +16,12 @@ enum MarkdownRenderer {
         while index < lines.count {
             let line = lines[index]
             if line.trimmingCharacters(in: .whitespaces).isEmpty {
+                index += 1
+                continue
+            }
+
+            if isHorizontalRule(line) {
+                blocks.append(.divider)
                 index += 1
                 continue
             }
@@ -70,6 +77,11 @@ enum MarkdownRenderer {
 
     private static func isTableRow(_ line: String) -> Bool {
         tableCells(in: line).count > 1
+    }
+
+    private static func isHorizontalRule(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        return trimmed.count >= 3 && trimmed.allSatisfy { $0 == "-" }
     }
 
     private static func isTableSeparator(_ line: String) -> Bool {

@@ -11,6 +11,7 @@ struct ResultView: View {
                     status
                     if !viewModel.responseText.isEmpty {
                         ResponseSegmentsView(responseText: viewModel.responseText)
+                        FollowUpComposer(viewModel: viewModel)
                     }
                     Color.clear
                         .frame(height: 1)
@@ -49,6 +50,29 @@ struct ResultView: View {
         default:
             EmptyView()
         }
+    }
+}
+
+struct FollowUpComposer: View {
+    @ObservedObject var viewModel: GenerationViewModel
+    @EnvironmentObject private var settings: AppSettings
+    @State private var question = ""
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            TextField("继续追问…", text: $question, axis: .vertical)
+                .lineLimit(1...4)
+                .textFieldStyle(.roundedBorder)
+            Button {
+                viewModel.followUp(question, model: settings.selectedModel)
+                question = ""
+            } label: {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.title2)
+            }
+            .disabled(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isStreaming)
+        }
+        .padding(.top, 4)
     }
 }
 

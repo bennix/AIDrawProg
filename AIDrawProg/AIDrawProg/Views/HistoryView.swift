@@ -58,6 +58,7 @@ struct HistoryView: View {
 
 private struct HistoryDetailView: View {
     let record: GenerationRecord
+    @StateObject private var viewModel = GenerationViewModel()
 
     var body: some View {
         ScrollView {
@@ -68,12 +69,14 @@ private struct HistoryDetailView: View {
                         .scaledToFit()
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-                ResponseSegmentsView(responseText: record.responseText)
+                ResponseSegmentsView(responseText: viewModel.responseText)
+                FollowUpComposer(viewModel: viewModel)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
         }
         .navigationTitle("生成详情")
         .navigationBarTitleDisplayMode(.inline)
+        .task { viewModel.load(record: record) }
     }
 }
