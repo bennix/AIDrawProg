@@ -61,7 +61,9 @@ struct ContentView: View {
                         get: { graph ?? FlowchartGraph(nodes: [], edges: []) },
                         set: { graph = $0 }),
                     restoreOriginal: { graph = nil },
-                    save: {})
+                    save: {
+                        if let graph { viewModel.saveGraph(graph) }
+                    })
             }
             .alert("尚未设置 API Key，请前往设置页填写", isPresented: $viewModel.needsAPIKey) {
                 Button("前往设置") { showingSettings = true }
@@ -117,6 +119,7 @@ struct ContentView: View {
                             viewModel.generate(
                                 drawing: canvasView.drawing,
                                 canvasBounds: canvasView.bounds,
+                                graph: graph,
                                 language: language,
                                 model: settings.selectedModel,
                                 modelContext: modelContext)
