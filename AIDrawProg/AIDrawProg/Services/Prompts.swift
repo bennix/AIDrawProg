@@ -8,9 +8,13 @@ enum Prompts {
     2. 给出一个完整、可直接运行的代码块，必须使用围栏格式（```python 或 ```swift）；
     3. 逐步解释这段代码，语言通俗，面向初学者。
     如果图片无法辨认为程序逻辑，请直接说明原因，并建议学生如何画得更清楚。此时不要编造代码。
+    如果用户消息包含“本地检查提示”，请把它当作待核实的教学线索：仅在图片确实支持该判断时，用温和、可操作的中文建议指出问题；不要把线索当作事实，也不要因为线索而阻止代码示例。
     """
 
-    static func userText(language: CodeLanguage) -> String {
-        "请把这张手绘图转换为 \(language == .python ? "Python" : "Swift") 代码。"
+    static func userText(language: CodeLanguage, inspection: FlowchartInspection) -> String {
+        let base = "请把这张手绘图转换为 \(language == .python ? "Python" : "Swift") 代码。"
+        guard !inspection.messages.isEmpty else { return base }
+        let hints = inspection.messages.map { "- \($0.text)" }.joined(separator: "\n")
+        return "\(base)\n\n本地检查提示（仅供参考，请结合图片核实，不要编造问题）：\n\(hints)"
     }
 }

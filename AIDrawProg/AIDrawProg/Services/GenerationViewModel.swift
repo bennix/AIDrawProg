@@ -15,6 +15,8 @@ final class GenerationViewModel: ObservableObject {
     @Published var phase: Phase = .idle
     @Published var responseText: String = ""
     @Published var needsAPIKey = false
+    @Published var inspection = FlowchartInspection.empty
+    @Published var isInspectionVisible = false
 
     private var task: Task<Void, Never>?
     private var activeRecord: GenerationRecord?
@@ -25,6 +27,8 @@ final class GenerationViewModel: ObservableObject {
                   language: CodeLanguage, model: String,
                   modelContext: ModelContext) {
         guard !isStreaming else { return }
+        inspection = FlowchartInspector.inspect(drawing: drawing, canvasBounds: canvasBounds)
+        isInspectionVisible = !inspection.messages.isEmpty
         guard KeychainHelper.loadAPIKey() != nil else {
             needsAPIKey = true
             return
@@ -47,7 +51,7 @@ final class GenerationViewModel: ObservableObject {
                     apiKey: apiKey,
                     model: model,
                     systemPrompt: Prompts.system,
-                    userText: Prompts.userText(language: language),
+                    userText: Prompts.userText(language: language, inspection: inspection),
                     imageBase64JPEG: base64)
                 for try await chunk in stream {
                     responseText += chunk
@@ -81,6 +85,8 @@ final class GenerationViewModel: ObservableObject {
         task = nil
         responseText = ""
         activeRecord = nil
+        inspection = .empty
+        isInspectionVisible = false
         phase = .idle
     }
 
@@ -89,6 +95,10 @@ final class GenerationViewModel: ObservableObject {
         responseText = record.responseText
         activeRecord = record
         phase = .finished
+    }
+
+    func dismissInspection() {
+        isInspectionVisible = false
     }
 
     func followUp(_ rawQuestion: String, model: String) {

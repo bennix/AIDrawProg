@@ -85,4 +85,21 @@ struct MarkdownRendererTests {
 
         #expect(inspection.messages.isEmpty)
     }
+
+    @Test func addsInspectionMessagesToUserPrompt() {
+        let prompt = Prompts.userText(
+            language: .python,
+            inspection: FlowchartInspection(messages: [
+                .init(kind: .disconnectedMarks, text: "检查箭头是否连接完整。"),
+            ]))
+
+        #expect(prompt.contains("本地检查提示"))
+        #expect(prompt.contains("检查箭头是否连接完整。"))
+    }
+
+    @Test func omitsInspectionSectionWhenThereAreNoMessages() {
+        let prompt = Prompts.userText(language: .swift, inspection: .empty)
+
+        #expect(!prompt.contains("本地检查提示"))
+    }
 }
