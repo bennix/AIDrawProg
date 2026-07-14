@@ -11,6 +11,7 @@
 - Python / Swift 目标语言选择
 - ZenMux 流式生成：图形理解、可运行代码和中文讲解
 - 生成前的非阻断流程图结构提示，帮助学生检查未连接笔画和疑似误触标记
+- 手绘流程图可规整为可编辑的标准节点与连线；原稿保留并可恢复
 - Markdown 结果渲染，支持标题、表格、代码高亮与代码复制
 - 对生成结果继续追问，追问内容会保存到历史记录
 - SwiftData 本地历史记录：缩略图、详情、复制与删除
@@ -58,6 +59,7 @@ AIDrawProg is an iOS app for programming beginners. Draw a flowchart or program 
 - Python and Swift output selection
 - Streaming ZenMux responses: diagram understanding, runnable code, and Chinese explanations
 - Non-blocking pre-generation flowchart hints for disconnected marks and likely accidental strokes
+- Hand-drawn flowcharts can be normalized into editable standard nodes and directed connections while retaining the original drawing
 - Markdown rendering with headings, tables, syntax-highlighted code, and copy support
 - Follow-up questions for generated answers; the conversation is saved in history
 - Local SwiftData history with thumbnails, detail views, copy, and deletion
