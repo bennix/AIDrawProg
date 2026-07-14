@@ -23,14 +23,14 @@ final class AIDrawProgUITests: XCTestCase {
     }
 
     @MainActor
-    func testExample() throws {
-        // UI tests must launch the application that they test.
+    func testCanvasClearRemainsAvailable() throws {
         let app = XCUIApplication()
+        app.launchArguments = ["-uiTesting"]
         app.launch()
 
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
-        // XCUIAutomation Documentation
-        // https://developer.apple.com/documentation/xcuiautomation
+        XCTAssertTrue(app.buttons["清空"].exists)
+        app.buttons["清空"].tap()
+        XCTAssertTrue(app.buttons["清空"].exists)
     }
 
     @MainActor

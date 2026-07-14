@@ -114,6 +114,13 @@ struct ContentView: View {
                 .padding(.vertical, 10)
             }
             Divider()
+            if viewModel.isInspectionVisible {
+                InspectionHintView(messages: viewModel.inspection.messages) {
+                    viewModel.dismissInspection()
+                }
+                .padding(.horizontal)
+                .padding(.top, 10)
+            }
             PencilCanvas(canvasView: canvasView)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .padding()
