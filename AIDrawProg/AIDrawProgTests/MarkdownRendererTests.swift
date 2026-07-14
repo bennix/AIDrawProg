@@ -102,4 +102,25 @@ struct MarkdownRendererTests {
 
         #expect(!prompt.contains("本地检查提示"))
     }
+
+    @Test func graphCodableRoundTripPreservesNodesAndEdges() throws {
+        let start = FlowchartNode(kind: .terminator, frame: .init(x: 0.1, y: 0.1, width: 0.2, height: 0.1))
+        let process = FlowchartNode(kind: .process, frame: .init(x: 0.1, y: 0.4, width: 0.3, height: 0.12), label: "计算")
+        let graph = FlowchartGraph(nodes: [start, process], edges: [.init(sourceID: start.id, targetID: process.id)])
+        let restored = try JSONDecoder().decode(FlowchartGraph.self, from: JSONEncoder().encode(graph))
+
+        #expect(restored == graph)
+    }
+
+    @Test func graphMovesNodeAndRemovesAttachedEdges() {
+        let source = FlowchartNode(kind: .process, frame: .init(x: 0.1, y: 0.1, width: 0.2, height: 0.1))
+        let target = FlowchartNode(kind: .decision, frame: .init(x: 0.5, y: 0.5, width: 0.2, height: 0.2))
+        var graph = FlowchartGraph(nodes: [source, target], edges: [.init(sourceID: source.id, targetID: target.id)])
+
+        graph.moveNode(id: source.id, to: .init(x: 0.2, y: 0.3, width: 0.2, height: 0.1))
+        graph.removeNode(id: target.id)
+
+        #expect(graph.nodes.first?.frame.x == 0.2)
+        #expect(graph.edges.isEmpty)
+    }
 }
