@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import CoreGraphics
+import UIKit
 @testable import AIDrawProg
 
 struct MarkdownRendererTests {
@@ -145,5 +146,12 @@ struct MarkdownRendererTests {
 
         #expect(edge?.sourceID == source.id)
         #expect(edge?.targetID == target.id)
+    }
+
+    @Test func rendererCreatesCanvasSizedImage() {
+        let graph = FlowchartGraph(nodes: [.init(kind: .process, frame: .init(x: 0.1, y: 0.1, width: 0.3, height: 0.15))], edges: [])
+        let image = FlowchartRenderer.image(graph: graph, size: .init(width: 600, height: 400))
+
+        #expect(image.size == .init(width: 600, height: 400))
     }
 }
