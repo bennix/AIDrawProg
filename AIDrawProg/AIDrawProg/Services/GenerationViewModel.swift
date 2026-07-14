@@ -76,6 +76,14 @@ final class GenerationViewModel: ObservableObject {
         if phase == .streaming { phase = .finished }
     }
 
+    func clearGeneration() {
+        task?.cancel()
+        task = nil
+        responseText = ""
+        activeRecord = nil
+        phase = .idle
+    }
+
     func load(record: GenerationRecord) {
         task?.cancel()
         responseText = record.responseText

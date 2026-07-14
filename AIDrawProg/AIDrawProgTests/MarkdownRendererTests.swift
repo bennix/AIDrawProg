@@ -42,4 +42,15 @@ struct MarkdownRendererTests {
             .paragraph("后文"),
         ])
     }
+
+    @Test @MainActor func clearingGenerationResetsDisplayedResponse() {
+        let viewModel = GenerationViewModel()
+        viewModel.responseText = "已生成的代码"
+        viewModel.phase = .finished
+
+        viewModel.clearGeneration()
+
+        #expect(viewModel.responseText.isEmpty)
+        #expect(viewModel.phase == .idle)
+    }
 }

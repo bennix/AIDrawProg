@@ -119,7 +119,10 @@ struct ContentView: View {
                 .padding()
         }
         .confirmationDialog("确定要清空画布吗？", isPresented: $showingClearConfirmation, titleVisibility: .visible) {
-            Button("清空", role: .destructive) { canvasView.drawing = PKDrawing() }
+            Button("清空", role: .destructive) {
+                canvasView.drawing = PKDrawing()
+                viewModel.clearGeneration()
+            }
         }
     }
 
