@@ -1,4 +1,6 @@
 import Testing
+import Foundation
+import CoreGraphics
 @testable import AIDrawProg
 
 struct MarkdownRendererTests {
@@ -52,5 +54,35 @@ struct MarkdownRendererTests {
 
         #expect(viewModel.responseText.isEmpty)
         #expect(viewModel.phase == .idle)
+    }
+
+    @Test func identifiesSeparatedStrokeGroups() {
+        let inspection = FlowchartInspector.inspect(
+            strokeBounds: [
+                CGRect(x: 20, y: 20, width: 80, height: 50),
+                CGRect(x: 400, y: 400, width: 80, height: 50),
+            ],
+            canvasBounds: CGRect(x: 0, y: 0, width: 600, height: 600))
+
+        #expect(inspection.messages.map(\.kind) == [.disconnectedMarks])
+    }
+
+    @Test func identifiesTinyMark() {
+        let inspection = FlowchartInspector.inspect(
+            strokeBounds: [CGRect(x: 100, y: 100, width: 4, height: 4)],
+            canvasBounds: CGRect(x: 0, y: 0, width: 600, height: 600))
+
+        #expect(inspection.messages.map(\.kind) == [.tinyMark])
+    }
+
+    @Test func leavesConnectedNormalMarksWithoutHints() {
+        let inspection = FlowchartInspector.inspect(
+            strokeBounds: [
+                CGRect(x: 20, y: 20, width: 80, height: 50),
+                CGRect(x: 90, y: 40, width: 80, height: 50),
+            ],
+            canvasBounds: CGRect(x: 0, y: 0, width: 600, height: 600))
+
+        #expect(inspection.messages.isEmpty)
     }
 }
