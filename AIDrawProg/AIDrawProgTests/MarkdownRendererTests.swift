@@ -123,4 +123,27 @@ struct MarkdownRendererTests {
         #expect(graph.nodes.first?.frame.x == 0.2)
         #expect(graph.edges.isEmpty)
     }
+
+    @Test func classifiesAxisAlignedQuadrilateralAsProcess() {
+        #expect(FlowchartRecognizer.classify(points: [
+            .init(0, 0), .init(100, 0), .init(100, 50), .init(0, 50), .init(0, 0),
+        ]) == .process)
+    }
+
+    @Test func classifiesRotatedQuadrilateralAsDecision() {
+        #expect(FlowchartRecognizer.classify(points: [
+            .init(50, 0), .init(100, 50), .init(50, 100), .init(0, 50), .init(50, 0),
+        ]) == .decision)
+    }
+
+    @Test func snapsArrowToNearestNodes() {
+        let source = FlowchartNode(kind: .process, frame: .init(x: 0.1, y: 0.1, width: 0.2, height: 0.1))
+        let target = FlowchartNode(kind: .process, frame: .init(x: 0.1, y: 0.8, width: 0.2, height: 0.1))
+        let edge = FlowchartRecognizer.edge(
+            start: .init(x: 120, y: 120), end: .init(x: 120, y: 520),
+            nodes: [source, target], canvasSize: .init(width: 600, height: 600))
+
+        #expect(edge?.sourceID == source.id)
+        #expect(edge?.targetID == target.id)
+    }
 }
