@@ -59,8 +59,6 @@ struct HistoryView: View {
 private struct HistoryDetailView: View {
     let record: GenerationRecord
     @StateObject private var viewModel = GenerationViewModel()
-    @State private var graph: FlowchartGraph?
-    @State private var showingEditor = false
 
     var body: some View {
         ScrollView {
@@ -70,10 +68,6 @@ private struct HistoryDetailView: View {
                         .resizable()
                         .scaledToFit()
                         .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-                if graph != nil {
-                    Button("编辑流程图") { showingEditor = true }
-                        .buttonStyle(.borderedProminent)
                 }
                 ResponseSegmentsView(responseText: viewModel.responseText)
                 FollowUpComposer(viewModel: viewModel)
@@ -85,19 +79,6 @@ private struct HistoryDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             viewModel.load(record: record)
-            graph = record.flowchartData.flatMap { try? JSONDecoder().decode(FlowchartGraph.self, from: $0) }
-        }
-        .sheet(isPresented: $showingEditor) {
-            FlowchartEditorView(
-                graph: Binding(
-                    get: { graph ?? FlowchartGraph(nodes: [], edges: []) },
-                    set: { graph = $0 }),
-                restoreOriginal: { graph = nil },
-                save: {
-                    if let graph {
-                        viewModel.saveGraph(graph, to: record)
-                    }
-                })
         }
     }
 }

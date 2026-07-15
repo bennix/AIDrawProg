@@ -113,39 +113,15 @@ struct MarkdownRendererTests {
         #expect(restored == graph)
     }
 
-    @Test func graphMovesNodeAndRemovesAttachedEdges() {
-        let source = FlowchartNode(kind: .process, frame: .init(x: 0.1, y: 0.1, width: 0.2, height: 0.1))
-        let target = FlowchartNode(kind: .decision, frame: .init(x: 0.5, y: 0.5, width: 0.2, height: 0.2))
-        var graph = FlowchartGraph(nodes: [source, target], edges: [.init(sourceID: source.id, targetID: target.id)])
+    @Test func imageExportCropsToContentInsteadOfInfiniteCanvas() {
+        let crop = ImageExporter.exportBounds(
+            contentBounds: .init(x: 5_000, y: 6_000, width: 120, height: 80),
+            canvasBounds: .init(x: 0, y: 0, width: 12_000, height: 12_000))
 
-        graph.moveNode(id: source.id, to: .init(x: 0.2, y: 0.3, width: 0.2, height: 0.1))
-        graph.removeNode(id: target.id)
-
-        #expect(graph.nodes.first?.frame.x == 0.2)
-        #expect(graph.edges.isEmpty)
-    }
-
-    @Test func classifiesAxisAlignedQuadrilateralAsProcess() {
-        #expect(FlowchartRecognizer.classify(points: [
-            .init(0, 0), .init(100, 0), .init(100, 50), .init(0, 50), .init(0, 0),
-        ]) == .process)
-    }
-
-    @Test func classifiesRotatedQuadrilateralAsDecision() {
-        #expect(FlowchartRecognizer.classify(points: [
-            .init(50, 0), .init(100, 50), .init(50, 100), .init(0, 50), .init(50, 0),
-        ]) == .decision)
-    }
-
-    @Test func snapsArrowToNearestNodes() {
-        let source = FlowchartNode(kind: .process, frame: .init(x: 0.1, y: 0.1, width: 0.2, height: 0.1))
-        let target = FlowchartNode(kind: .process, frame: .init(x: 0.1, y: 0.8, width: 0.2, height: 0.1))
-        let edge = FlowchartRecognizer.edge(
-            start: .init(x: 120, y: 120), end: .init(x: 120, y: 520),
-            nodes: [source, target], canvasSize: .init(width: 600, height: 600))
-
-        #expect(edge?.sourceID == source.id)
-        #expect(edge?.targetID == target.id)
+        #expect(crop != nil)
+        #expect(crop!.width < 500)
+        #expect(crop!.height < 500)
+        #expect(crop!.contains(.init(x: 5_060, y: 6_040)))
     }
 
     @Test func rendererCreatesCanvasSizedImage() {

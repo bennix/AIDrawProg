@@ -10,8 +10,6 @@ struct ContentView: View {
     @State private var showingClearConfirmation = false
     @State private var showingSettings = false
     @State private var showingHistory = false
-    @State private var graph: FlowchartGraph?
-    @State private var showingFlowchartEditor = false
     @EnvironmentObject var settings: AppSettings
     @Environment(\.modelContext) private var modelContext
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -55,16 +53,6 @@ struct ContentView: View {
             .sheet(isPresented: $showingHistory) {
                 NavigationStack { HistoryView() }
             }
-            .sheet(isPresented: $showingFlowchartEditor) {
-                FlowchartEditorView(
-                    graph: Binding(
-                        get: { graph ?? FlowchartGraph(nodes: [], edges: []) },
-                        set: { graph = $0 }),
-                    restoreOriginal: { graph = nil },
-                    save: {
-                        if let graph { viewModel.saveGraph(graph) }
-                    })
-            }
             .alert("尚未设置 API Key，请前往设置页填写", isPresented: $viewModel.needsAPIKey) {
                 Button("前往设置") { showingSettings = true }
                 Button("取消", role: .cancel) {}
@@ -91,14 +79,6 @@ struct ContentView: View {
                     Button(role: .destructive) { showingClearConfirmation = true } label: {
                         Label("清空", systemImage: "trash")
                     }
-                    Button {
-                        graph = FlowchartRecognizer.recognize(
-                            drawing: canvasView.drawing,
-                            canvasBounds: canvasView.bounds)
-                        showingFlowchartEditor = true
-                    } label: {
-                        Label("规整图形", systemImage: "square.on.circle")
-                    }
                     Picker("语言", selection: $language) {
                         Text("Python").tag(CodeLanguage.python)
                         Text("Swift").tag(CodeLanguage.swift)
@@ -119,7 +99,7 @@ struct ContentView: View {
                             viewModel.generate(
                                 drawing: canvasView.drawing,
                                 canvasBounds: canvasView.bounds,
-                                graph: graph,
+                                graph: nil,
                                 language: language,
                                 model: settings.selectedModel,
                                 modelContext: modelContext)
@@ -149,7 +129,6 @@ struct ContentView: View {
         .confirmationDialog("确定要清空画布吗？", isPresented: $showingClearConfirmation, titleVisibility: .visible) {
             Button("清空", role: .destructive) {
                 canvasView.drawing = PKDrawing()
-                graph = nil
                 viewModel.clearGeneration()
             }
         }

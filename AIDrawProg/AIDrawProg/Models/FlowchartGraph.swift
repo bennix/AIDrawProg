@@ -97,22 +97,4 @@ struct FlowchartGraph: Codable, Equatable {
         self.edges = edges
     }
 
-    mutating func moveNode(id: UUID, to frame: NormalizedRect) {
-        guard let index = nodes.firstIndex(where: { $0.id == id }) else { return }
-        nodes[index].frame = frame.clamped()
-    }
-
-    mutating func removeNode(id: UUID) {
-        nodes.removeAll { $0.id == id }
-        edges.removeAll { $0.sourceID == id || $0.targetID == id }
-    }
-
-    mutating func addEdge(from sourceID: UUID, to targetID: UUID) {
-        guard sourceID != targetID,
-              nodes.contains(where: { $0.id == sourceID }),
-              nodes.contains(where: { $0.id == targetID }),
-              !edges.contains(where: { $0.sourceID == sourceID && $0.targetID == targetID })
-        else { return }
-        edges.append(FlowchartEdge(sourceID: sourceID, targetID: targetID))
-    }
 }

@@ -17,7 +17,6 @@ final class GenerationViewModel: ObservableObject {
     @Published var needsAPIKey = false
     @Published var inspection = FlowchartInspection.empty
     @Published var isInspectionVisible = false
-    @Published var currentGraph: FlowchartGraph?
 
     private var task: Task<Void, Never>?
     private var activeRecord: GenerationRecord?
@@ -30,7 +29,6 @@ final class GenerationViewModel: ObservableObject {
         guard !isStreaming else { return }
         inspection = FlowchartInspector.inspect(drawing: drawing, canvasBounds: canvasBounds)
         isInspectionVisible = !inspection.messages.isEmpty
-        currentGraph = graph
         guard KeychainHelper.loadAPIKey() != nil else {
             needsAPIKey = true
             return
@@ -99,7 +97,6 @@ final class GenerationViewModel: ObservableObject {
         task = nil
         responseText = ""
         activeRecord = nil
-        currentGraph = nil
         inspection = .empty
         isInspectionVisible = false
         phase = .idle
@@ -109,15 +106,7 @@ final class GenerationViewModel: ObservableObject {
         task?.cancel()
         responseText = record.responseText
         activeRecord = record
-        currentGraph = record.flowchartData.flatMap { try? JSONDecoder().decode(FlowchartGraph.self, from: $0) }
         phase = .finished
-    }
-
-    func saveGraph(_ graph: FlowchartGraph, to record: GenerationRecord? = nil) {
-        currentGraph = graph
-        let target = record ?? activeRecord
-        target?.flowchartData = try? JSONEncoder().encode(graph)
-        target?.imageData = FlowchartRenderer.image(graph: graph, size: CGSize(width: 1024, height: 768)).jpegData(compressionQuality: 0.8) ?? target?.imageData ?? Data()
     }
 
     func dismissInspection() {
