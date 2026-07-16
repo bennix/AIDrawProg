@@ -7,11 +7,12 @@
 ## 功能
 
 - PencilKit 画布，支持手指与 Apple Pencil 绘制
+- 大画布双指平移 / 捏合缩放，双指双击复位视口
 - 画笔、橡皮、撤销、重做与一键清空
+- 笔画自动规整：手绘矩形、菱形、椭圆、平行四边形、起止框，以及直线 / 弯折连线与箭头（含两笔箭头），落笔后原位替换为标准形状；工具栏「规整」开关可随时关闭，撤销可恢复手绘原稿
 - Python / Swift 目标语言选择
 - ZenMux 流式生成：图形理解、可运行代码和中文讲解
 - 生成前的非阻断流程图结构提示，帮助学生检查未连接笔画和疑似误触标记
-- 手绘流程图可规整为可编辑的标准节点与连线；原稿保留并可恢复
 - Markdown 结果渲染，支持标题、表格、代码高亮与代码复制
 - 对生成结果继续追问，追问内容会保存到历史记录
 - SwiftData 本地历史记录：缩略图、详情、复制与删除
@@ -55,11 +56,12 @@ AIDrawProg is an iOS app for programming beginners. Draw a flowchart or program 
 ## Features
 
 - PencilKit canvas with finger and Apple Pencil input
+- Large workspace with two-finger pan/pinch zoom; double two-finger tap resets the viewport
 - Pen, eraser, undo, redo, and clear controls
+- Auto shape snap: hand-drawn rectangles, diamonds, ellipses, parallelograms, terminators, straight/elbow connectors, and arrows (including two-stroke arrowheads) are replaced in place with clean shapes; toggle Snap in the toolbar, and undo restores the original stroke
 - Python and Swift output selection
 - Streaming ZenMux responses: diagram understanding, runnable code, and Chinese explanations
 - Non-blocking pre-generation flowchart hints for disconnected marks and likely accidental strokes
-- Hand-drawn flowcharts can be normalized into editable standard nodes and directed connections while retaining the original drawing
 - Markdown rendering with headings, tables, syntax-highlighted code, and copy support
 - Follow-up questions for generated answers; the conversation is saved in history
 - Local SwiftData history with thumbnails, detail views, copy, and deletion
