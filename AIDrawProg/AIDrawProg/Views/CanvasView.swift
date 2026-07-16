@@ -28,19 +28,29 @@ struct PencilCanvas: UIViewRepresentable {
         private var isReplacingStroke = false
 
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            defer { knownStrokeCount = canvasView.drawing.strokes.count }
+            guard autoSnapEnabled, !isReplacingStroke else { return }
             let strokes = canvasView.drawing.strokes
-            defer { knownStrokeCount = strokes.count }
-            guard autoSnapEnabled,
-                  !isReplacingStroke,
-                  strokes.count == knownStrokeCount + 1,
-                  let finished = strokes.last,
-                  let snapped = ShapeSnapper.snappedStroke(for: finished) else { return }
+            guard strokes.count == knownStrokeCount + 1, let finished = strokes.last else { return }
+
+            let original = canvasView.drawing
+            var replacement: PKDrawing?
+            if let snapped = ShapeSnapper.snappedStroke(for: finished) {
+                var drawing = original
+                drawing.strokes[strokes.count - 1] = snapped
+                replacement = drawing
+            } else if let merge = ShapeSnapper.arrowheadMerge(headStroke: finished,
+                                                              strokes: Array(strokes.dropLast())) {
+                // A "V" drawn at the end of an earlier line turns it into an arrow.
+                var drawing = original
+                drawing.strokes.removeLast()
+                drawing.strokes[merge.lineIndex] = merge.merged
+                replacement = drawing
+            }
+            guard let replacement else { return }
 
             isReplacingStroke = true
-            let original = canvasView.drawing
-            var drawing = original
-            drawing.strokes[drawing.strokes.count - 1] = snapped
-            canvasView.drawing = drawing
+            canvasView.drawing = replacement
             // Undo restores the hand-drawn stroke instead of dropping the shape.
             canvasView.undoManager?.registerUndo(withTarget: canvasView) { target in
                 target.drawing = original

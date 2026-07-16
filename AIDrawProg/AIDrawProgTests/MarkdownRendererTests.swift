@@ -2,6 +2,7 @@ import Testing
 import Foundation
 import CoreGraphics
 import UIKit
+import PencilKit
 @testable import AIDrawProg
 
 struct MarkdownRendererTests {
@@ -215,6 +216,49 @@ struct ShapeSnapperTests {
             Issue.record("箭头笔画未被识别")
             return
         }
+    }
+
+    @Test func recognizesRectangleWithUnclosedEndGap() {
+        var points = wobble(polygonStroke([
+            CGPoint(x: 100, y: 100), CGPoint(x: 300, y: 100),
+            CGPoint(x: 300, y: 200), CGPoint(x: 100, y: 200),
+        ]))
+        points.removeLast(12)
+
+        guard case .rectangle? = ShapeSnapper.classify(points: points) else {
+            Issue.record("留有缺口的矩形笔画未被识别")
+            return
+        }
+    }
+
+    @Test func mergesSeparateArrowheadStrokeIntoLine() {
+        let line = makeStroke((0...60).map { CGPoint(x: 100 + CGFloat($0) * 5, y: 150) })
+        var headPoints = (0...10).map { CGPoint(x: 380 + CGFloat($0) * 2, y: 135 + CGFloat($0) * 1.5) }
+        headPoints.append(contentsOf: (1...10).map { CGPoint(x: 400 - CGFloat($0) * 2, y: 150 + CGFloat($0) * 1.5) })
+        let head = makeStroke(headPoints)
+
+        let merge = ShapeSnapper.arrowheadMerge(headStroke: head, strokes: [line])
+
+        #expect(merge?.lineIndex == 0)
+    }
+
+    @Test func ignoresArrowheadStrokeFarFromAnyLine() {
+        let line = makeStroke((0...60).map { CGPoint(x: 100 + CGFloat($0) * 5, y: 150) })
+        var headPoints = (0...10).map { CGPoint(x: 380 + CGFloat($0) * 2, y: 335 + CGFloat($0) * 1.5) }
+        headPoints.append(contentsOf: (1...10).map { CGPoint(x: 400 - CGFloat($0) * 2, y: 350 + CGFloat($0) * 1.5) })
+        let head = makeStroke(headPoints)
+
+        #expect(ShapeSnapper.arrowheadMerge(headStroke: head, strokes: [line]) == nil)
+    }
+
+    private func makeStroke(_ points: [CGPoint]) -> PKStroke {
+        let controlPoints = points.enumerated().map { index, location in
+            PKStrokePoint(location: location, timeOffset: TimeInterval(index) * 0.01,
+                          size: CGSize(width: 5, height: 5), opacity: 1, force: 1,
+                          azimuth: 0, altitude: .pi / 2)
+        }
+        return PKStroke(ink: PKInk(.pen, color: .black),
+                        path: PKStrokePath(controlPoints: controlPoints, creationDate: Date()))
     }
 
     @Test func leavesSmallHandwritingAlone() {

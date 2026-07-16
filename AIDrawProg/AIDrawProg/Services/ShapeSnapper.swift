@@ -19,7 +19,7 @@ enum ShapeSnapper {
     /// Shapes smaller than this are treated as handwriting/labels and left alone.
     static let minimumSize: CGFloat = 40
     /// Mean fit error allowed for closed shapes, relative to the shape's larger side.
-    private static let closedFitTolerance: CGFloat = 0.09
+    private static let closedFitTolerance: CGFloat = 0.12
     /// Path-length / endpoint-span ratio below which an open stroke counts as straight.
     private static let straightnessTolerance: CGFloat = 1.08
     /// Lines within this angle of horizontal/vertical snap to the axis.
@@ -43,7 +43,8 @@ enum ShapeSnapper {
 
         let span = distance(first, last)
         let length = pathLength(of: points)
-        if span < maxDim * 0.25, length > maxDim * 2 {
+        // Hand-drawn loops rarely close perfectly, so allow a generous end gap.
+        if span < maxDim * 0.4, length > maxDim * 1.7 {
             return classifyClosed(points: points, bounds: bounds)
         }
         return classifyOpen(points: points, span: span, length: length)
@@ -51,15 +52,21 @@ enum ShapeSnapper {
 
     private static func classifyClosed(points: [CGPoint], bounds: CGRect) -> Shape? {
         let maxDim = max(bounds.width, bounds.height)
+        let corners = cornerCount(points: points)
+        // Corner count softly biases polygon-vs-ellipse: a wobbly rectangle
+        // can out-fit an ellipse numerically and vice versa.
+        let polygonPenalty: CGFloat = corners >= 3 ? 1 : 1.6
+        let ellipsePenalty: CGFloat = corners >= 3 ? 1.6 : 1
+
         var candidates: [(shape: Shape, error: CGFloat)] = [
-            (.rectangle(bounds), meanDistance(points, toPolygon: rectangleCorners(bounds))),
-            (.diamond(bounds), meanDistance(points, toPolygon: diamondCorners(bounds))),
-            (.ellipse(bounds), ellipseError(points, in: bounds)),
+            (.rectangle(bounds), meanDistance(points, toPolygon: rectangleCorners(bounds)) * polygonPenalty),
+            (.diamond(bounds), meanDistance(points, toPolygon: diamondCorners(bounds)) * polygonPenalty),
+            (.ellipse(bounds), ellipseError(points, in: bounds) * ellipsePenalty),
         ]
         let skew = estimatedSkew(points: points, bounds: bounds)
         if abs(skew) > bounds.width * 0.12, abs(skew) < bounds.width * 0.45 {
             candidates.append((.parallelogram(bounds, skew: skew),
-                               meanDistance(points, toPolygon: parallelogramCorners(bounds, skew: skew))))
+                               meanDistance(points, toPolygon: parallelogramCorners(bounds, skew: skew)) * polygonPenalty))
         }
         guard let best = candidates.min(by: { $0.error < $1.error }),
               best.error < maxDim * closedFitTolerance else { return nil }
@@ -67,6 +74,39 @@ enum ShapeSnapper {
             return .stadium(rect)
         }
         return best.shape
+    }
+
+    /// Counts sharp direction changes along a (nominally) closed stroke.
+    private static func cornerCount(points: [CGPoint]) -> Int {
+        let n = points.count
+        guard n >= 12 else { return 0 }
+        let step = max(3, n / 24)
+        var turns = [CGFloat](repeating: 0, count: n)
+        for i in 0..<n {
+            let a = points[(i - step + n) % n]
+            let b = points[i]
+            let c = points[(i + step) % n]
+            let v1 = atan2(b.y - a.y, b.x - a.x)
+            let v2 = atan2(c.y - b.y, c.x - b.x)
+            var diff = v2 - v1
+            while diff > .pi { diff -= 2 * .pi }
+            while diff < -.pi { diff += 2 * .pi }
+            turns[i] = abs(diff)
+        }
+        let threshold: CGFloat = .pi * 0.22
+        var count = 0
+        var i = 0
+        while i < n {
+            if turns[i] > threshold {
+                let isLocalMax = ((i - step)...(i + step)).allSatisfy { turns[($0 + n) % n] <= turns[i] }
+                if isLocalMax {
+                    count += 1
+                    i += step
+                }
+            }
+            i += 1
+        }
+        return count
     }
 
     private static func classifyOpen(points: [CGPoint], span: CGFloat, length: CGFloat) -> Shape? {
@@ -89,14 +129,75 @@ enum ShapeSnapper {
               tipIndex >= 2, tipIndex < points.count - 1 else { return nil }
 
         let shaft = Array(points[0...tipIndex])
-        guard pathLength(of: shaft) / tipDistance < 1.12 else { return nil }
+        guard pathLength(of: shaft) / tipDistance < 1.2 else { return nil }
 
         let tip = points[tipIndex]
         let tail = Array(points[tipIndex...])
         let tailLength = pathLength(of: tail)
-        guard tailLength > 12, tailLength < tipDistance * 0.6,
-              tail.allSatisfy({ distance($0, tip) < tipDistance * 0.45 }) else { return nil }
+        guard tailLength > 10, tailLength < tipDistance * 0.8,
+              tail.allSatisfy({ distance($0, tip) < tipDistance * 0.6 }) else { return nil }
         return .arrow(from: first, to: axisSnappedEnd(from: first, to: tip))
+    }
+
+    // MARK: - Two-stroke arrows
+
+    /// Detects an arrowhead ("V") drawn as a separate stroke near the end of an
+    /// earlier straight stroke and merges the two into one arrow stroke.
+    static func arrowheadMerge(headStroke: PKStroke, strokes: [PKStroke]) -> (lineIndex: Int, merged: PKStroke)? {
+        let headPoints = headStroke.path.interpolatedPoints(by: .distance(4)).map(\.location)
+        guard let vertex = arrowheadVertex(of: headPoints) else { return nil }
+        let headBounds = boundingRect(of: headPoints)
+        let headSize = max(headBounds.width, headBounds.height)
+
+        for (index, candidate) in strokes.enumerated().reversed() {
+            let points = candidate.path.interpolatedPoints(by: .distance(6)).map(\.location)
+            guard let first = points.first, let last = points.last else { continue }
+            let span = distance(first, last)
+            guard span >= minimumSize,
+                  pathLength(of: points) / span < 1.15,
+                  headSize < span * 0.8 else { continue }
+
+            let snapDistance = max(24, headSize)
+            if distance(vertex, last) <= snapDistance {
+                return (index, arrowStroke(from: first, to: last, like: candidate))
+            }
+            if distance(vertex, first) <= snapDistance {
+                return (index, arrowStroke(from: last, to: first, like: candidate))
+            }
+        }
+        return nil
+    }
+
+    /// The vertex of an open V-shaped stroke, or nil if it doesn't look like one.
+    private static func arrowheadVertex(of points: [CGPoint]) -> CGPoint? {
+        guard points.count >= 5, let first = points.first, let last = points.last else { return nil }
+        let bounds = boundingRect(of: points)
+        let size = max(bounds.width, bounds.height)
+        guard size >= 10, size <= 150 else { return nil }
+
+        var vertexIndex = 0
+        var deviation: CGFloat = 0
+        for (index, point) in points.enumerated() {
+            let d = distance(from: point, toSegment: (first, last))
+            if d > deviation {
+                deviation = d
+                vertexIndex = index
+            }
+        }
+        guard deviation > distance(first, last) * 0.25,
+              vertexIndex > 1, vertexIndex < points.count - 2 else { return nil }
+
+        let vertex = points[vertexIndex]
+        let leg1 = Array(points[0...vertexIndex])
+        let leg2 = Array(points[vertexIndex...])
+        guard pathLength(of: leg1) / max(distance(first, vertex), 1) < 1.25,
+              pathLength(of: leg2) / max(distance(vertex, last), 1) < 1.25 else { return nil }
+        return vertex
+    }
+
+    private static func arrowStroke(from start: CGPoint, to end: CGPoint, like stroke: PKStroke) -> PKStroke {
+        PKStroke(ink: stroke.ink,
+                 path: idealPath(for: .arrow(from: start, to: end), width: averageWidth(of: stroke)))
     }
 
     private static func axisSnappedEnd(from start: CGPoint, to end: CGPoint) -> CGPoint {
