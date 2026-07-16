@@ -12,18 +12,21 @@ enum ShapeSnapper {
         case diamond(CGRect)
         case ellipse(CGRect)
         case stadium(CGRect)
-        case line(from: CGPoint, to: CGPoint)
-        case arrow(from: CGPoint, to: CGPoint)
+        /// Waypoints of a straight or elbow (single-bend) connector.
+        case line([CGPoint])
+        /// Same as `line`, with an arrowhead at the last waypoint.
+        case arrow([CGPoint])
     }
 
     /// Shapes smaller than this are treated as handwriting/labels and left alone.
     static let minimumSize: CGFloat = 40
     /// Mean fit error allowed for closed shapes, relative to the shape's larger side.
     private static let closedFitTolerance: CGFloat = 0.12
-    /// Path-length / endpoint-span ratio below which an open stroke counts as straight.
-    private static let straightnessTolerance: CGFloat = 1.08
     /// Lines within this angle of horizontal/vertical snap to the axis.
     private static let axisSnapAngle: CGFloat = .pi / 18
+    /// Max direction change at an elbow bend. Sharper turns are arrowhead "V"s,
+    /// which must stay unsnapped so they can merge with an earlier line.
+    private static let elbowMaxTurn: CGFloat = .pi * 0.56
 
     // MARK: - Entry point
 
@@ -47,7 +50,7 @@ enum ShapeSnapper {
         if span < maxDim * 0.4, length > maxDim * 1.7 {
             return classifyClosed(points: points, bounds: bounds)
         }
-        return classifyOpen(points: points, span: span, length: length)
+        return classifyOpen(points: points)
     }
 
     private static func classifyClosed(points: [CGPoint], bounds: CGRect) -> Shape? {
@@ -109,40 +112,103 @@ enum ShapeSnapper {
         return count
     }
 
-    private static func classifyOpen(points: [CGPoint], span: CGFloat, length: CGFloat) -> Shape? {
-        guard let first = points.first, let last = points.last, span > 0 else { return nil }
-        if length / span < straightnessTolerance {
-            return .line(from: first, to: axisSnappedEnd(from: first, to: last))
-        }
-        return arrowShape(points: points)
+    /// Open strokes become straight or elbow connectors, optionally with an
+    /// arrowhead: the stroke is simplified to a few waypoints, a trailing
+    /// doubled-back arrowhead cluster is stripped, and the remaining shaft is
+    /// kept only if it is one or two clean segments.
+    private static func classifyOpen(points: [CGPoint]) -> Shape? {
+        let bounds = boundingRect(of: points)
+        let tolerance = max(7, max(bounds.width, bounds.height) * 0.04)
+        var waypoints = simplifiedWaypoints(of: points, tolerance: tolerance)
+        let hasArrowhead = stripArrowhead(&waypoints)
+        guard let shaft = validatedShaft(waypoints) else { return nil }
+        return hasArrowhead ? .arrow(shaft) : .line(shaft)
     }
 
-    /// A single-stroke arrow: a straight shaft followed by a short doubled-back
-    /// tail near the tip (the hand-drawn arrowhead).
-    private static func arrowShape(points: [CGPoint]) -> Shape? {
-        guard let first = points.first else { return nil }
-        let distances = points.map { distance(first, $0) }
-        guard let tipDistance = distances.max(), tipDistance >= minimumSize else { return nil }
-        // The stroke may revisit the tip while drawing the arrowhead, so take
-        // the first point that reaches (almost) the farthest distance.
-        guard let tipIndex = distances.firstIndex(where: { $0 >= tipDistance * 0.98 }),
-              tipIndex >= 2, tipIndex < points.count - 1 else { return nil }
+    /// Removes a trailing arrowhead: waypoints that huddle near a shaft endpoint
+    /// and contain at least one sharp double-back turn.
+    private static func stripArrowhead(_ waypoints: inout [CGPoint]) -> Bool {
+        let count = waypoints.count
+        guard count >= 3 else { return false }
+        let radius = min(60, polylineLength(waypoints) * 0.35)
+        for anchor in 1...(count - 2) {
+            let suffix = waypoints[(anchor + 1)...]
+            guard suffix.allSatisfy({ distance($0, waypoints[anchor]) <= radius }) else { continue }
+            let sharpestTurn = (anchor...(count - 2)).map { directionChange(at: $0, in: waypoints) }.max() ?? 0
+            guard sharpestTurn >= .pi * 0.66 else { continue }
+            waypoints.removeSubrange((anchor + 1)...)
+            return true
+        }
+        return false
+    }
 
-        let shaft = Array(points[0...tipIndex])
-        guard pathLength(of: shaft) / tipDistance < 1.2 else { return nil }
+    /// Accepts a straight segment or a single gentle elbow, axis-snapped.
+    private static func validatedShaft(_ waypoints: [CGPoint]) -> [CGPoint]? {
+        guard waypoints.count == 2 || waypoints.count == 3 else { return nil }
+        let lengths = zip(waypoints, waypoints.dropFirst()).map { distance($0, $1) }
+        let total = lengths.reduce(0, +)
+        if waypoints.count == 2 {
+            guard total >= minimumSize else { return nil }
+        } else {
+            // Short or sharply-bent two-segment strokes are likely arrowhead
+            // "V"s or handwriting, not elbow connectors.
+            guard lengths.allSatisfy({ $0 >= 36 }), total >= 100,
+                  directionChange(at: 1, in: waypoints) <= elbowMaxTurn else { return nil }
+        }
+        var snapped = [waypoints[0]]
+        for point in waypoints.dropFirst() {
+            snapped.append(axisSnappedEnd(from: snapped[snapped.count - 1], to: point))
+        }
+        return snapped
+    }
 
-        let tip = points[tipIndex]
-        let tail = Array(points[tipIndex...])
-        let tailLength = pathLength(of: tail)
-        guard tailLength > 10, tailLength < tipDistance * 0.8,
-              tail.allSatisfy({ distance($0, tip) < tipDistance * 0.6 }) else { return nil }
-        return .arrow(from: first, to: axisSnappedEnd(from: first, to: tip))
+    /// Douglas-Peucker simplification of a deduplicated stroke. Snapped elbow
+    /// strokes repeat corner control points, which would otherwise yield
+    /// zero-length segments and bogus turn angles.
+    private static func simplifiedWaypoints(of points: [CGPoint], tolerance: CGFloat) -> [CGPoint] {
+        var deduped: [CGPoint] = []
+        for point in points where deduped.last.map({ distance($0, point) > 1 }) ?? true {
+            deduped.append(point)
+        }
+        return simplifiedPolyline(deduped, tolerance: tolerance)
+    }
+
+    private static func simplifiedPolyline(_ points: [CGPoint], tolerance: CGFloat) -> [CGPoint] {
+        guard points.count > 2, let first = points.first, let last = points.last else { return points }
+        var maxDistance: CGFloat = 0
+        var maxIndex = 0
+        for index in 1..<(points.count - 1) {
+            let d = distance(from: points[index], toSegment: (first, last))
+            if d > maxDistance {
+                maxDistance = d
+                maxIndex = index
+            }
+        }
+        guard maxDistance > tolerance else { return [first, last] }
+        let left = simplifiedPolyline(Array(points[0...maxIndex]), tolerance: tolerance)
+        let right = simplifiedPolyline(Array(points[maxIndex...]), tolerance: tolerance)
+        return left.dropLast() + right
+    }
+
+    private static func directionChange(at index: Int, in waypoints: [CGPoint]) -> CGFloat {
+        let incoming = atan2(waypoints[index].y - waypoints[index - 1].y,
+                             waypoints[index].x - waypoints[index - 1].x)
+        let outgoing = atan2(waypoints[index + 1].y - waypoints[index].y,
+                             waypoints[index + 1].x - waypoints[index].x)
+        var diff = outgoing - incoming
+        while diff > .pi { diff -= 2 * .pi }
+        while diff < -.pi { diff += 2 * .pi }
+        return abs(diff)
+    }
+
+    private static func polylineLength(_ waypoints: [CGPoint]) -> CGFloat {
+        zip(waypoints, waypoints.dropFirst()).reduce(0) { $0 + distance($1.0, $1.1) }
     }
 
     // MARK: - Two-stroke arrows
 
     /// Detects an arrowhead ("V") drawn as a separate stroke near the end of an
-    /// earlier straight stroke and merges the two into one arrow stroke.
+    /// earlier straight or elbow stroke and merges the two into one arrow stroke.
     static func arrowheadMerge(headStroke: PKStroke, strokes: [PKStroke]) -> (lineIndex: Int, merged: PKStroke)? {
         let headPoints = headStroke.path.interpolatedPoints(by: .distance(4)).map(\.location)
         guard let vertex = arrowheadVertex(of: headPoints) else { return nil }
@@ -151,18 +217,16 @@ enum ShapeSnapper {
 
         for (index, candidate) in strokes.enumerated().reversed() {
             let points = candidate.path.interpolatedPoints(by: .distance(6)).map(\.location)
-            guard let first = points.first, let last = points.last else { continue }
-            let span = distance(first, last)
-            guard span >= minimumSize,
-                  pathLength(of: points) / span < 1.15,
-                  headSize < span * 0.8 else { continue }
+            let tolerance = max(7, max(boundingRect(of: points).width, boundingRect(of: points).height) * 0.04)
+            guard let shaft = validatedShaft(simplifiedWaypoints(of: points, tolerance: tolerance)),
+                  headSize < polylineLength(shaft) * 0.8 else { continue }
 
             let snapDistance = max(24, headSize)
-            if distance(vertex, last) <= snapDistance {
-                return (index, arrowStroke(from: first, to: last, like: candidate))
+            if distance(vertex, shaft[shaft.count - 1]) <= snapDistance {
+                return (index, arrowStroke(along: shaft, like: candidate))
             }
-            if distance(vertex, first) <= snapDistance {
-                return (index, arrowStroke(from: last, to: first, like: candidate))
+            if distance(vertex, shaft[0]) <= snapDistance {
+                return (index, arrowStroke(along: shaft.reversed(), like: candidate))
             }
         }
         return nil
@@ -195,9 +259,9 @@ enum ShapeSnapper {
         return vertex
     }
 
-    private static func arrowStroke(from start: CGPoint, to end: CGPoint, like stroke: PKStroke) -> PKStroke {
+    private static func arrowStroke(along waypoints: [CGPoint], like stroke: PKStroke) -> PKStroke {
         PKStroke(ink: stroke.ink,
-                 path: idealPath(for: .arrow(from: start, to: end), width: averageWidth(of: stroke)))
+                 path: idealPath(for: .arrow(waypoints), width: averageWidth(of: stroke)))
     }
 
     private static func axisSnappedEnd(from start: CGPoint, to end: CGPoint) -> CGPoint {
@@ -265,10 +329,10 @@ enum ShapeSnapper {
             locations = ellipsePerimeter(rect)
         case .stadium(let rect):
             locations = stadiumPerimeter(rect)
-        case .line(let start, let end):
-            locations = densifiedSegment(start, end)
-        case .arrow(let start, let end):
-            locations = arrowPoints(from: start, to: end)
+        case .line(let waypoints):
+            locations = densifiedOpenPolyline(waypoints)
+        case .arrow(let waypoints):
+            locations = arrowPoints(along: waypoints)
         }
         let controlPoints = locations.enumerated().map { index, location in
             PKStrokePoint(location: location,
@@ -323,8 +387,16 @@ enum ShapeSnapper {
         return points
     }
 
-    private static func densifiedSegment(_ start: CGPoint, _ end: CGPoint) -> [CGPoint] {
-        [start] + sampledSegment(start, end) + [end]
+    /// Samples an open polyline densely, repeating interior waypoints so the
+    /// PencilKit spline keeps elbow bends sharp.
+    private static func densifiedOpenPolyline(_ waypoints: [CGPoint]) -> [CGPoint] {
+        var points: [CGPoint] = []
+        for (start, end) in zip(waypoints, waypoints.dropFirst()) {
+            points.append(contentsOf: [start, start])
+            points.append(contentsOf: sampledSegment(start, end))
+        }
+        points.append(waypoints[waypoints.count - 1])
+        return points
     }
 
     private static func sampledSegment(_ start: CGPoint, _ end: CGPoint) -> [CGPoint] {
@@ -376,16 +448,17 @@ enum ShapeSnapper {
         }
     }
 
-    private static func arrowPoints(from start: CGPoint, to end: CGPoint) -> [CGPoint] {
-        let angle = atan2(end.y - start.y, end.x - start.x)
-        let span = distance(start, end)
-        let barbLength = max(16, min(32, span * 0.22))
+    private static func arrowPoints(along waypoints: [CGPoint]) -> [CGPoint] {
+        let end = waypoints[waypoints.count - 1]
+        let previous = waypoints[waypoints.count - 2]
+        let angle = atan2(end.y - previous.y, end.x - previous.x)
+        let barbLength = max(16, min(32, polylineLength(waypoints) * 0.22))
         let barbAngle: CGFloat = .pi / 6
         let leftBarb = CGPoint(x: end.x - barbLength * cos(angle - barbAngle),
                                y: end.y - barbLength * sin(angle - barbAngle))
         let rightBarb = CGPoint(x: end.x - barbLength * cos(angle + barbAngle),
                                 y: end.y - barbLength * sin(angle + barbAngle))
-        var points = densifiedSegment(start, end)
+        var points = densifiedOpenPolyline(waypoints)
         points.append(contentsOf: [end, end])
         points.append(contentsOf: sampledSegment(end, leftBarb))
         points.append(contentsOf: [leftBarb, leftBarb])

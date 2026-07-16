@@ -197,11 +197,49 @@ struct ShapeSnapperTests {
     @Test func recognizesStraightLineWithAxisSnap() {
         let points = wobble((0...30).map { CGPoint(x: 100 + CGFloat($0) * 8, y: 150 + CGFloat($0) * 0.2) }, amount: 1.5)
 
-        guard case .line(let start, let end)? = ShapeSnapper.classify(points: points) else {
+        guard case .line(let waypoints)? = ShapeSnapper.classify(points: points) else {
             Issue.record("直线笔画未被识别")
             return
         }
-        #expect(abs(end.y - start.y) < 0.001)
+        #expect(waypoints.count == 2)
+        #expect(abs(waypoints[0].y - waypoints[1].y) < 0.001)
+    }
+
+    @Test func keepsElbowBendWhenRecognizingBentArrow() {
+        var points = (0...40).map { CGPoint(x: 100 + CGFloat($0) * 5, y: 150) }
+        points.append(contentsOf: (1...30).map { CGPoint(x: 300, y: 150 + CGFloat($0) * 5) })
+        points.append(contentsOf: [
+            CGPoint(x: 288, y: 285), CGPoint(x: 294, y: 292),
+            CGPoint(x: 300, y: 300),
+            CGPoint(x: 306, y: 292), CGPoint(x: 312, y: 285),
+        ])
+
+        guard case .arrow(let waypoints)? = ShapeSnapper.classify(points: wobble(points, amount: 1)) else {
+            Issue.record("弯折箭头未被识别")
+            return
+        }
+        #expect(waypoints.count == 3)
+        #expect(abs(waypoints[1].x - 300) < 6)
+        #expect(abs(waypoints[1].y - 150) < 6)
+        #expect(abs(waypoints[2].y - 300) < 6)
+    }
+
+    @Test func recognizesElbowLineWithoutArrowhead() {
+        var points = (0...40).map { CGPoint(x: 100 + CGFloat($0) * 5, y: 150) }
+        points.append(contentsOf: (1...30).map { CGPoint(x: 300, y: 150 + CGFloat($0) * 5) })
+
+        guard case .line(let waypoints)? = ShapeSnapper.classify(points: wobble(points, amount: 1.5)) else {
+            Issue.record("弯折连线未被识别")
+            return
+        }
+        #expect(waypoints.count == 3)
+    }
+
+    @Test func leavesStandaloneArrowheadVUnsnapped() {
+        var points = (0...12).map { CGPoint(x: 100 + CGFloat($0) * 2, y: 100 + CGFloat($0) * 2.5) }
+        points.append(contentsOf: (1...12).map { CGPoint(x: 124 - CGFloat($0) * 2, y: 130 + CGFloat($0) * 2.5) })
+
+        #expect(ShapeSnapper.classify(points: points) == nil)
     }
 
     @Test func recognizesSingleStrokeArrow() {
