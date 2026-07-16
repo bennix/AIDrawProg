@@ -131,3 +131,107 @@ struct MarkdownRendererTests {
         #expect(image.size == .init(width: 600, height: 400))
     }
 }
+
+struct ShapeSnapperTests {
+    private func wobble(_ points: [CGPoint], amount: CGFloat = 3) -> [CGPoint] {
+        points.enumerated().map { index, point in
+            let offset = amount * sin(CGFloat(index) * 1.7)
+            return CGPoint(x: point.x + offset, y: point.y - offset)
+        }
+    }
+
+    private func polygonStroke(_ corners: [CGPoint]) -> [CGPoint] {
+        var points: [CGPoint] = []
+        for index in corners.indices {
+            let start = corners[index]
+            let end = corners[(index + 1) % corners.count]
+            for step in 0..<20 {
+                let t = CGFloat(step) / 20
+                points.append(CGPoint(x: start.x + (end.x - start.x) * t,
+                                      y: start.y + (end.y - start.y) * t))
+            }
+        }
+        points.append(corners[0])
+        return points
+    }
+
+    @Test func recognizesHandDrawnRectangle() {
+        let points = wobble(polygonStroke([
+            CGPoint(x: 100, y: 100), CGPoint(x: 300, y: 100),
+            CGPoint(x: 300, y: 200), CGPoint(x: 100, y: 200),
+        ]))
+
+        guard case .rectangle(let rect)? = ShapeSnapper.classify(points: points) else {
+            Issue.record("矩形笔画未被识别")
+            return
+        }
+        #expect(abs(rect.minX - 97) < 8)
+        #expect(abs(rect.maxX - 303) < 8)
+    }
+
+    @Test func recognizesHandDrawnDiamond() {
+        let points = wobble(polygonStroke([
+            CGPoint(x: 200, y: 100), CGPoint(x: 320, y: 180),
+            CGPoint(x: 200, y: 260), CGPoint(x: 80, y: 180),
+        ]))
+
+        guard case .diamond? = ShapeSnapper.classify(points: points) else {
+            Issue.record("菱形笔画未被识别")
+            return
+        }
+    }
+
+    @Test func recognizesHandDrawnEllipse() {
+        let points = wobble((0...80).map { step -> CGPoint in
+            let t = CGFloat(step) / 80 * 2 * .pi
+            return CGPoint(x: 200 + 90 * cos(t), y: 150 + 60 * sin(t))
+        }, amount: 2)
+
+        guard case .ellipse? = ShapeSnapper.classify(points: points) else {
+            Issue.record("椭圆笔画未被识别")
+            return
+        }
+    }
+
+    @Test func recognizesStraightLineWithAxisSnap() {
+        let points = wobble((0...30).map { CGPoint(x: 100 + CGFloat($0) * 8, y: 150 + CGFloat($0) * 0.2) }, amount: 1.5)
+
+        guard case .line(let start, let end)? = ShapeSnapper.classify(points: points) else {
+            Issue.record("直线笔画未被识别")
+            return
+        }
+        #expect(abs(end.y - start.y) < 0.001)
+    }
+
+    @Test func recognizesSingleStrokeArrow() {
+        var points = (0...40).map { CGPoint(x: 100 + CGFloat($0) * 5, y: 150) }
+        points.append(contentsOf: [
+            CGPoint(x: 285, y: 138), CGPoint(x: 292, y: 144),
+            CGPoint(x: 300, y: 150),
+            CGPoint(x: 292, y: 156), CGPoint(x: 285, y: 162),
+        ])
+
+        guard case .arrow? = ShapeSnapper.classify(points: wobble(points, amount: 1)) else {
+            Issue.record("箭头笔画未被识别")
+            return
+        }
+    }
+
+    @Test func leavesSmallHandwritingAlone() {
+        let points = (0...30).map { step -> CGPoint in
+            let t = CGFloat(step) / 30 * 2 * .pi
+            return CGPoint(x: 200 + 12 * cos(t), y: 150 + 10 * sin(t))
+        }
+
+        #expect(ShapeSnapper.classify(points: points) == nil)
+    }
+
+    @Test func leavesScribbleAlone() {
+        let points = (0...60).map { step -> CGPoint in
+            CGPoint(x: 100 + CGFloat(step) * 3,
+                    y: 150 + 40 * sin(CGFloat(step) * 0.9))
+        }
+
+        #expect(ShapeSnapper.classify(points: points) == nil)
+    }
+}

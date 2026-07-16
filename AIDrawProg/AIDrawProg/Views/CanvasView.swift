@@ -3,16 +3,51 @@ import PencilKit
 
 struct PencilCanvas: UIViewRepresentable {
     let canvasView: PKCanvasView
+    var autoSnapEnabled: Bool = true
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> CanvasViewportContainer {
         canvasView.drawingPolicy = .anyInput
         canvasView.backgroundColor = .white
         canvasView.tool = PKInkingTool(.pen, color: .black, width: 5)
         canvasView.isScrollEnabled = false
+        canvasView.delegate = context.coordinator
         return CanvasViewportContainer(canvasView: canvasView)
     }
 
-    func updateUIView(_ uiView: CanvasViewportContainer, context: Context) {}
+    func updateUIView(_ uiView: CanvasViewportContainer, context: Context) {
+        context.coordinator.autoSnapEnabled = autoSnapEnabled
+    }
+
+    /// Watches for newly finished strokes and replaces recognizable ones with
+    /// idealized flowchart shapes in place.
+    final class Coordinator: NSObject, PKCanvasViewDelegate {
+        var autoSnapEnabled = true
+        private var knownStrokeCount = 0
+        private var isReplacingStroke = false
+
+        func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            let strokes = canvasView.drawing.strokes
+            defer { knownStrokeCount = strokes.count }
+            guard autoSnapEnabled,
+                  !isReplacingStroke,
+                  strokes.count == knownStrokeCount + 1,
+                  let finished = strokes.last,
+                  let snapped = ShapeSnapper.snappedStroke(for: finished) else { return }
+
+            isReplacingStroke = true
+            let original = canvasView.drawing
+            var drawing = original
+            drawing.strokes[drawing.strokes.count - 1] = snapped
+            canvasView.drawing = drawing
+            // Undo restores the hand-drawn stroke instead of dropping the shape.
+            canvasView.undoManager?.registerUndo(withTarget: canvasView) { target in
+                target.drawing = original
+            }
+            isReplacingStroke = false
+        }
+    }
 }
 
 /// A large virtual workspace. The scroll view owns navigation gestures while

@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var language: CodeLanguage = .python
     @State private var selectedTab = 0
     @State private var showingClearConfirmation = false
+    @AppStorage("autoSnapShapes") private var autoSnapShapes = true
     @State private var showingSettings = false
     @State private var showingHistory = false
     @EnvironmentObject var settings: AppSettings
@@ -79,6 +80,10 @@ struct ContentView: View {
                     Button(role: .destructive) { showingClearConfirmation = true } label: {
                         Label("清空", systemImage: "trash")
                     }
+                    Toggle(isOn: $autoSnapShapes) {
+                        Label("规整", systemImage: "square.on.circle")
+                    }
+                    .toggleStyle(.button)
                     Picker("语言", selection: $language) {
                         Text("Python").tag(CodeLanguage.python)
                         Text("Swift").tag(CodeLanguage.swift)
@@ -122,7 +127,7 @@ struct ContentView: View {
                 .padding(.horizontal)
                 .padding(.top, 10)
             }
-            PencilCanvas(canvasView: canvasView)
+            PencilCanvas(canvasView: canvasView, autoSnapEnabled: autoSnapShapes)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .padding()
         }
